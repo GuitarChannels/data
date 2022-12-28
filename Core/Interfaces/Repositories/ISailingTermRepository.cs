@@ -4,8 +4,8 @@ using Core.Entities;
 
 namespace Core.Interfaces.Repositories
 {
-    public interface ISailingTermRepository
-    {
-        Task<IReadOnlyCollection<SailingTerm>> GetAll();
-    }
+	public interface IGuitarTermRepository
+	{
+		Task<IReadOnlyCollection<GuitarTerm>> GetAll();
+	}
 }

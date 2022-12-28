@@ -8,20 +8,20 @@ using MongoDB.Driver;
 
 namespace Infrastructure.Repositories
 {
-    public class SailingTermRepository : ISailingTermRepository
-    {
-        private readonly IMongoCollection<SailingTerm> _col;
+	public class GuitarTermRepository : IGuitarTermRepository
+	{
+		private readonly IMongoCollection<GuitarTerm> _col;
 
-        public SailingTermRepository(IMongoCollection<SailingTerm> col)
-        {
-            _col = col ?? throw new ArgumentNullException(nameof(col));
-        }
-        
-        public async Task<IReadOnlyCollection<SailingTerm>> GetAll()
-        {
-            return await _col
-                .Find(new BsonDocument())
-                .ToListAsync();
-        }
-    }
+		public GuitarTermRepository(IMongoCollection<GuitarTerm> col)
+		{
+			_col = col ?? throw new ArgumentNullException(nameof(col));
+		}
+
+		public async Task<IReadOnlyCollection<GuitarTerm>> GetAll()
+		{
+			return await _col
+				.Find(new BsonDocument())
+				.ToListAsync();
+		}
+	}
 }

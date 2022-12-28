@@ -14,201 +14,203 @@ using Presentation.API.GraphQL.Types;
 
 namespace Presentation.API.GraphQL.Resolver
 {
-    public sealed class ChannelResolver
-        : BaseResolver, IResolver, IChannelResolver
-    {
-        private readonly IChannelRepository _channelRepository;
-        private readonly IIdentifySailingChannelUseCase _identifySailingChannelUseCase;
-        private readonly IChannelPublishPredictionRepository _channelPublishPredictionRepository;
-        private readonly IMapper _mapper;
+	public sealed class ChannelResolver
+		: BaseResolver, IResolver, IChannelResolver
+	{
+		private readonly IChannelRepository _channelRepository;
+		private readonly IIdentifyGuitarChannelUseCase _identifyGuitarChannelUseCase;
+		private readonly IChannelPublishPredictionRepository _channelPublishPredictionRepository;
+		private readonly IMapper _mapper;
 
-        public ChannelResolver(
-            IChannelRepository channelRepository,
-            IIdentifySailingChannelUseCase identifySailingChannelUseCase,
-            IMapper mapper,
-            IChannelPublishPredictionRepository channelPublishPredictionRepository)
-        {
-            _channelRepository = channelRepository ?? throw new ArgumentNullException(nameof(channelRepository));
-            _identifySailingChannelUseCase = identifySailingChannelUseCase ?? throw new ArgumentNullException(nameof(identifySailingChannelUseCase));
-            _mapper = mapper ?? throw new ArgumentNullException("mapper");
-            _channelPublishPredictionRepository = channelPublishPredictionRepository ?? throw new ArgumentNullException(nameof(channelPublishPredictionRepository));
-        }
+		public ChannelResolver(
+			IChannelRepository channelRepository,
+			IIdentifyGuitarChannelUseCase identifyGuitarChannelUseCase,
+			IMapper mapper,
+			IChannelPublishPredictionRepository channelPublishPredictionRepository)
+		{
+			_channelRepository = channelRepository ?? throw new ArgumentNullException(nameof(channelRepository));
+			_identifyGuitarChannelUseCase = identifyGuitarChannelUseCase ?? throw new ArgumentNullException(nameof(identifyGuitarChannelUseCase));
+			_mapper = mapper ?? throw new ArgumentNullException("mapper");
+			_channelPublishPredictionRepository = channelPublishPredictionRepository ?? throw new ArgumentNullException(nameof(channelPublishPredictionRepository));
+		}
 
-        /// <summary>
-        /// Resolves all queries on guest accesses
-        /// </summary>
-        /// <param name="graphQlQuery"></param>
-        public void ResolveQuery(GraphQlQuery graphQlQuery)
-        {
-            // GUEST ACCESSES: list of all guest access entries
-            graphQlQuery.FieldAsync<ListGraphType<ChannelType>>(
-                "channels",
-                arguments: new QueryArguments(
-                    new QueryArgument<NonNullGraphType<StringGraphType>> { Name = "sortBy" },
-                    new QueryArgument<NonNullGraphType<IntGraphType>> { Name = "skip" },
-                    new QueryArgument<NonNullGraphType<IntGraphType>> { Name = "take" },
-                    new QueryArgument<NonNullGraphType<StringGraphType>> { Name = "language" }
-                ),
-                resolve: async context =>
-                {
-                    var channels = await _channelRepository.GetAll(
-                        (ChannelSorting) Enum.Parse(typeof(ChannelSorting), context.GetArgument<string>("sortBy")),
-                        context.GetArgument<int>("skip"),
-                        context.GetArgument<int>("take"),
-                        context.GetArgument<string>("language")
-                    );
+		/// <summary>
+		/// Resolves all queries on guest accesses
+		/// </summary>
+		/// <param name="graphQlQuery"></param>
+		public void ResolveQuery(GraphQlQuery graphQlQuery)
+		{
+			// GUEST ACCESSES: list of all guest access entries
+			graphQlQuery.FieldAsync<ListGraphType<ChannelType>>(
+				"channels",
+				arguments: new QueryArguments(
+					new QueryArgument<NonNullGraphType<StringGraphType>> { Name = "sortBy" },
+					new QueryArgument<NonNullGraphType<IntGraphType>> { Name = "skip" },
+					new QueryArgument<NonNullGraphType<IntGraphType>> { Name = "take" },
+					new QueryArgument<NonNullGraphType<StringGraphType>> { Name = "language" }
+				),
+				resolve: async context =>
+				{
+					var channels = await _channelRepository.GetAll(
+						(ChannelSorting)Enum.Parse(typeof(ChannelSorting), context.GetArgument<string>("sortBy")),
+						context.GetArgument<int>("skip"),
+						context.GetArgument<int>("take"),
+						context.GetArgument<string>("language")
+					);
 
-                    var channelsWithTruncatedDescription =
-                        TruncateChannelDescriptions(channels);
+					var channelsWithTruncatedDescription =
+						TruncateChannelDescriptions(channels);
 
-                    // map entity to model
-                    return _mapper.Map<List<ChannelModel>>(channelsWithTruncatedDescription);
-                }
-            );
+					// map entity to model
+					return _mapper.Map<List<ChannelModel>>(channelsWithTruncatedDescription);
+				}
+			);
 
-            // CHANNEL: retrieve single channel
-            graphQlQuery.FieldAsync<ChannelType>(
-                "channel",
-                arguments: new QueryArguments(
-                    new QueryArgument<NonNullGraphType<IdGraphType>> { Name = "id" }
-                ),
-                resolve: async context =>
-                {
-                    var channel = await _channelRepository.Get(context.GetArgument<string>("id"));
+			// CHANNEL: retrieve single channel
+			graphQlQuery.FieldAsync<ChannelType>(
+				"channel",
+				arguments: new QueryArguments(
+					new QueryArgument<NonNullGraphType<IdGraphType>> { Name = "id" }
+				),
+				resolve: async context =>
+				{
+					var channel = await _channelRepository.Get(context.GetArgument<string>("id"));
 
-                    // map entity to model
-                    return _mapper.Map<ChannelModel>(channel);
-                }
-            );
+					// map entity to model
+					return _mapper.Map<ChannelModel>(channel);
+				}
+			);
 
-            // CHANNEL COUNT TOTAL
-            graphQlQuery.FieldAsync<IntGraphType>(
-                "channelCountTotal",
-                resolve: async context =>
-                {
-                    var channelCount = await _channelRepository.Count();
+			// CHANNEL COUNT TOTAL
+			graphQlQuery.FieldAsync<IntGraphType>(
+				"channelCountTotal",
+				resolve: async context =>
+				{
+					var channelCount = await _channelRepository.Count();
 
-                    // map entity to model
-                    return channelCount;
-                }
-            );
+					// map entity to model
+					return channelCount;
+				}
+			);
 
-            // IDENTIFY CHANNELS: take a list of url hints and identify sailing channels from them
-            graphQlQuery.FieldAsync<ChannelIdentificationType>(
-                "identifyChannel",
-                arguments: new QueryArguments(
-                    new QueryArgument<NonNullGraphType<StringGraphType>> { Name = "channelUrlHint" }
-                ),
-                resolve: async context =>
-                {
-                    var result = await _identifySailingChannelUseCase.Handle(
-                        new IdentifySailingChannelRequest(
-                            context.GetArgument<string>("channelUrlHint")
-                        )
-                    );
+			// IDENTIFY CHANNELS: take a list of url hints and identify guitar channels from them
+			graphQlQuery.FieldAsync<ChannelIdentificationType>(
+				"identifyChannel",
+				arguments: new QueryArguments(
+					new QueryArgument<NonNullGraphType<StringGraphType>> { Name = "channelUrlHint" }
+				),
+				resolve: async context =>
+				{
+					var result = await _identifyGuitarChannelUseCase.Handle(
+						new IdentifyGuitarChannelRequest(
+							context.GetArgument<string>("channelUrlHint")
+						)
+					);
 
-                    var identifiedChannel = result.IdentifiedChannel;
+					var identifiedChannel = result.IdentifiedChannel;
 
-                    // truncate description
-                    if (result.IdentifiedChannel != null && result.IdentifiedChannel.Channel != null)
-                    {
-                        identifiedChannel = identifiedChannel with {
-                            Channel = identifiedChannel.Channel with {
-                                Description = identifiedChannel.Channel.Description.Truncate(300, true)
-                            }
-                        };
-                    }
+					// truncate description
+					if (result.IdentifiedChannel != null && result.IdentifiedChannel.Channel != null)
+					{
+						identifiedChannel = identifiedChannel with
+						{
+							Channel = identifiedChannel.Channel with
+							{
+								Description = identifiedChannel.Channel.Description.Truncate(300, true)
+							}
+						};
+					}
 
-                    // map entity to model
-                    return _mapper.Map<ChannelIdentificationModel>(identifiedChannel);
-                }
-            );
+					// map entity to model
+					return _mapper.Map<ChannelIdentificationModel>(identifiedChannel);
+				}
+			);
 
-            // CHANNEL PUBLISH PREDICTION
-            graphQlQuery.FieldAsync<ListGraphType<PublishSchedulePredictionType>>(
-                "channelPublishPrediction",
-                arguments: new QueryArguments(
-                    new QueryArgument<NonNullGraphType<IdGraphType>> { Name = "channelId" },
-                    new QueryArgument<BooleanGraphType> { Name = "filterBelowAverage", DefaultValue = false},
-                    new QueryArgument<FloatGraphType> {Name = "minGradient", DefaultValue = 0.7f}
-                ),
-                resolve: async context =>
-                {
-                    var channelId = context.GetArgument<string>("channelId");
-                    var filterBelowAverage = context.GetArgument<bool>("filterBelowAverage");
-                    var minGradient = context.GetArgument<double>("minGradient");
+			// CHANNEL PUBLISH PREDICTION
+			graphQlQuery.FieldAsync<ListGraphType<PublishSchedulePredictionType>>(
+				"channelPublishPrediction",
+				arguments: new QueryArguments(
+					new QueryArgument<NonNullGraphType<IdGraphType>> { Name = "channelId" },
+					new QueryArgument<BooleanGraphType> { Name = "filterBelowAverage", DefaultValue = false },
+					new QueryArgument<FloatGraphType> { Name = "minGradient", DefaultValue = 0.7f }
+				),
+				resolve: async context =>
+				{
+					var channelId = context.GetArgument<string>("channelId");
+					var filterBelowAverage = context.GetArgument<bool>("filterBelowAverage");
+					var minGradient = context.GetArgument<double>("minGradient");
 
-                    var predictionResult = await _channelPublishPredictionRepository.Get(channelId);
+					var predictionResult = await _channelPublishPredictionRepository.Get(channelId);
 
-                    if (predictionResult is null || predictionResult.Gradient <= minGradient)
-                    {
-                        return null;
-                    }
+					if (predictionResult is null || predictionResult.Gradient <= minGradient)
+					{
+						return null;
+					}
 
-                    var predictionItems = predictionResult.PredictionItems;
+					var predictionItems = predictionResult.PredictionItems;
 
-                    if (filterBelowAverage)
-                    {
-                        predictionItems = predictionItems.Where(i => i.DeviationFromAverage > 0);
-                    }
+					if (filterBelowAverage)
+					{
+						predictionItems = predictionItems.Where(i => i.DeviationFromAverage > 0);
+					}
 
-                    return _mapper.Map<List<PublishSchedulePredictionModel>>(predictionItems);
-                });
+					return _mapper.Map<List<PublishSchedulePredictionModel>>(predictionItems);
+				});
 
-            // CHANNEL PUBLISH PREDICTIONS
-            graphQlQuery.FieldAsync<ListGraphType<PublishPredictionProgrammingItemType>>(
-                "channelPublishPredictions",
-                arguments: new QueryArguments(
-                    new QueryArgument<FloatGraphType> {Name = "minGradient", DefaultValue = 0.7f}
-                ),
-                resolve: async context =>
-                {
-                    var minGradient = context.GetArgument<double>("minGradient");
+			// CHANNEL PUBLISH PREDICTIONS
+			graphQlQuery.FieldAsync<ListGraphType<PublishPredictionProgrammingItemType>>(
+				"channelPublishPredictions",
+				arguments: new QueryArguments(
+					new QueryArgument<FloatGraphType> { Name = "minGradient", DefaultValue = 0.7f }
+				),
+				resolve: async context =>
+				{
+					var minGradient = context.GetArgument<double>("minGradient");
 
-                    var predictionResultsPerChannel =
-                        await _channelPublishPredictionRepository.Get();
+					var predictionResultsPerChannel =
+						await _channelPublishPredictionRepository.Get();
 
-                    predictionResultsPerChannel = predictionResultsPerChannel
-                        .Where(p => p.Gradient >= minGradient)
-                        .ToList();
+					predictionResultsPerChannel = predictionResultsPerChannel
+						.Where(p => p.Gradient >= minGradient)
+						.ToList();
 
-                    var programmingLookup = new Dictionary<Weekstamp, List<Channel>>();
+					var programmingLookup = new Dictionary<Weekstamp, List<Channel>>();
 
-                    foreach (var publishPrediction in predictionResultsPerChannel)
-                    {
-                        var topPredictionResult = publishPrediction.PredictionItems.FirstOrDefault();
-                        if (topPredictionResult is null) continue;
+					foreach (var publishPrediction in predictionResultsPerChannel)
+					{
+						var topPredictionResult = publishPrediction.PredictionItems.FirstOrDefault();
+						if (topPredictionResult is null) continue;
 
-                        var predictionWeekstamp = (Weekstamp) topPredictionResult;
+						var predictionWeekstamp = (Weekstamp)topPredictionResult;
 
-                        if (!programmingLookup.ContainsKey(predictionWeekstamp))
-                        {
-                            programmingLookup.Add(predictionWeekstamp, new List<Channel>());
-                        }
+						if (!programmingLookup.ContainsKey(predictionWeekstamp))
+						{
+							programmingLookup.Add(predictionWeekstamp, new List<Channel>());
+						}
 
-                        programmingLookup[predictionWeekstamp].Add(new Channel
-                        {
-                            Id = publishPrediction.Id,
-                            Title = publishPrediction.Title
-                        });
-                    }
+						programmingLookup[predictionWeekstamp].Add(new Channel
+						{
+							Id = publishPrediction.Id,
+							Title = publishPrediction.Title
+						});
+					}
 
-                    return programmingLookup
-                        .Select(programmingLookupItem =>
-                            new PublishPredictionProgrammingItemModel(
-                                programmingLookupItem.Key.DayOfTheWeek,
-                                programmingLookupItem.Key.HourOfTheDay,
-                                _mapper.Map<List<ChannelModel>>(programmingLookupItem.Value)))
-                        .ToList();
-                });
-        }
+					return programmingLookup
+						.Select(programmingLookupItem =>
+							new PublishPredictionProgrammingItemModel(
+								programmingLookupItem.Key.DayOfTheWeek,
+								programmingLookupItem.Key.HourOfTheDay,
+								_mapper.Map<List<ChannelModel>>(programmingLookupItem.Value)))
+						.ToList();
+				});
+		}
 
-        /// <summary>
-        /// Resolves all mutations on guest accesses.
-        /// </summary>
-        /// <param name="graphQlMutation"></param>
-        public void ResolveMutation(GraphQlMutation graphQlMutation)
-        {
-        }
-    }
+		/// <summary>
+		/// Resolves all mutations on guest accesses.
+		/// </summary>
+		/// <param name="graphQlMutation"></param>
+		public void ResolveMutation(GraphQlMutation graphQlMutation)
+		{
+		}
+	}
 }

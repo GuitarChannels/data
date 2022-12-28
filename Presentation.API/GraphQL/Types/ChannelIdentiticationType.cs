@@ -3,20 +3,20 @@ using Infrastructure.API.Models;
 
 namespace Presentation.API.GraphQL.Types
 {
-    public sealed class ChannelIdentificationType
-        : ObjectGraphType<ChannelIdentificationModel>, IGraphQLType
-    {
-        public ChannelIdentificationType()
-        {
-            Name = "ChannelIdentification";
+	public sealed class ChannelIdentificationType
+		: ObjectGraphType<ChannelIdentificationModel>, IGraphQLType
+	{
+		public ChannelIdentificationType()
+		{
+			Name = "ChannelIdentification";
 
-            Field(i => i.ChannelID, true);
+			Field(i => i.ChannelID, true);
 
-            Field<DisplayItemType>("Channel");
+			Field<DisplayItemType>("Channel");
 
-            Field(i => i.IsSailingChannel);
-            Field(i => i.Source, true);
-            Field(i => i.Status);
-        }
-    }
+			Field(i => i.IsGuitarChannel);
+			Field(i => i.Source, true);
+			Field(i => i.Status);
+		}
+	}
 }

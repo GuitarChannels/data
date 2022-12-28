@@ -1,4 +1,4 @@
 ﻿namespace Core.DTO.UseCaseRequests
 {
-    public record IdentifySailingChannelRequest(string? PossibleYouTubeChannelUrl);
+	public record IdentifyGuitarChannelRequest(string? PossibleYouTubeChannelUrl);
 }
